@@ -7,6 +7,9 @@ def call(Map configMap){
             timeout(time: 30, unit: 'MINUTES') 
             disableConcurrentBuilds() 
         }
+        parameters{
+             booleanParam(name: 'deploy', defaultValue: false, description: 'Select to deploy or not') 
+        }
         environment{
             appVersion = ''  // we can use this env variables across the pipeline 
             region = 'us-east-1' 
@@ -64,21 +67,16 @@ def call(Map configMap){
                 }   
             }  
             stage('Deploy') {
+                when{
+                    expression { params.deploy } 
+                }
                 steps {
-                    withAWS(region: 'us-east-1', credentials: 'aws-credentials') {
-                        sh """
-                            aws eks update-kubeconfig --region ${region} --name ${project}-${environment}
-
-                            cd helm
-
-                            sed -i 's/IMAGE_VERSION/${appVersion}/g' values-${environment}.yaml
-
-                            helm upgrade --install ${component} -n ${project} -f values-${environment}.yaml . 
-                        """
-
-                    }
+                    build job: 'backend-cd', parameters: [
+                        string(name: 'VERSION', value: "$appVersion"),
+                        string(name: 'ENVIRONMENT', value: "dev"),
+                    ], wait: true 
                 }    
-             } 
+            } 
         } 
         post{
             always{
